@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PAP">
+  <meta name="theme-color" content="#0A0A0F">
+  <title>PAP</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="css/style.css?v=26">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+      caches.keys().then(keys => {
+        keys.forEach(k => caches.delete(k));
+      });
+    }
+  </script>
+</head>
+
+<body>
+
+  <!-- ═══ MAP (fullscreen, dark) ═══ -->
+  <div id="map"></div>
+
+  <!-- ═══ TOP BAR (Trip Type) ═══ -->
+  <div class="top-bar">
+    <button id="btn-trip" class="trip-btn">
+      <span id="lbl-trip">Gualeguaychú ➔ Concepción</span>
+      <span class="chevron">▾</span>
+    </button>
+    <div style="flex: 1"></div>
+    <button id="btn-locate" class="float-circle top-right" aria-label="Mi ubicación">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round">
+        <polygon points="3 11 22 2 13 21 11 13 3 11" />
+      </svg>
+    </button>
+  </div>
+
+  <!-- ═══ BOTTOM PANEL ═══ -->
+  <div id="bottom-panel" class="bottom-panel">
+    <div class="panel-handle-area" id="panel-handle">
+      <div class="panel-handle-bar"></div>
+    </div>
+
+    <!-- SUMMARY BAR -->
+    <div class="panel-summary" id="panel-summary">
+      <div class="summary-left" id="summary-left">
+        <span class="summary-stats" id="summary-stats">Sin paradas</span>
+        <span class="summary-sub" id="summary-sub">Agregá tu primera parada</span>
+      </div>
+      <button class="summary-menu" id="btn-panel-menu" aria-label="Opciones">⋯</button>
+    </div>
+
+    <!-- STOP CARDS -->
+    <div class="panel-stops" id="panel-stops">
+      <!-- Se llena dinámicamente -->
+    </div>
+
+    <!-- ACTION BUTTONS -->
+    <div class="panel-actions" id="panel-actions">
+      <button id="btn-add-stop" class="btn-add-stop">
+        <span class="add-icon">+</span> Agregar Pasajero
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ TOAST ═══ -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ═══ LOADING ═══ -->
+  <div id="loading" class="loading-overlay hidden">
+    <div class="loading-card">
+      <div class="spinner"></div><span id="loading-msg">Cargando…</span>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Menú principal ═══ -->
+  <div id="sheet-menu" class="sheet-backdrop hidden">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Configuración</div>
+      <button class="sheet-option" id="opt-settings">
+        <span class="opt-icon">⚙️</span>Configurar Bases Fijas
+      </button>
+      <div class="sheet-divider"></div>
+      <button class="sheet-option" id="opt-new-route" style="color: var(--red);">
+        <span class="opt-icon">🗑️</span>Borrar todas las paradas
+      </button>
+      <button class="sheet-cancel">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Agregar Pasajero ═══ -->
+  <div id="sheet-passenger" class="sheet-backdrop hidden">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Agregar Pasajero</div>
+
+      <input type="text" id="pass-name" class="text-input" placeholder="Nombre (Ej: Juan Perez)" autocomplete="off">
+
+      <!-- Origen -->
+      <label class="sheet-subtitle" style="display:block; margin:16px 0 8px; font-weight:600; color:var(--text-dim);"
+        id="lbl-title-origin">Dirección de Origen</label>
+      <div
+        style="background:var(--surface-2); padding:12px; border-radius:8px; border:1px solid var(--border); margin-bottom: 8px;">
+        <div id="lbl-pass-origin" style="color:var(--text-dim); font-size:15px; margin-bottom: 8px; font-weight: 500;">
+          No seleccionada</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-ghost" style="flex:1; padding:10px; font-size:13px;"
+            onclick="App.pickAddress('origin', 'map')">📍 Mapa</button>
+          <button class="btn-ghost" style="flex:1; padding:10px; font-size:13px;"
+            onclick="App.pickAddress('origin', 'search')">🔎 Escribir</button>
+          <button class="btn-ghost" style="flex:1; padding:10px; font-size:13px;"
+            onclick="App.pickAddress('origin', 'gmaps')">🗺️ Link</button>
+        </div>
+      </div>
+
+      <!-- Destino -->
+      <label class="sheet-subtitle" style="display:block; margin:16px 0 8px; font-weight:600; color:var(--text-dim);"
+        id="lbl-title-dest">Dirección de Destino</label>
+      <div
+        style="background:var(--surface-2); padding:12px; border-radius:8px; border:1px solid var(--border); margin-bottom: 24px;">
+        <div id="lbl-pass-dest" style="color:var(--text-dim); font-size:15px; margin-bottom: 8px; font-weight: 500;">No
+          seleccionada</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-ghost" style="flex:1; padding:10px; font-size:13px;"
+            onclick="App.pickAddress('dest', 'map')">📍 Mapa</button>
+          <button class="btn-ghost" style="flex:1; padding:10px; font-size:13px;"
+            onclick="App.pickAddress('dest', 'search')">🔎 Escribir</button>
+          <button class="btn-ghost" style="flex:1; padding:10px; font-size:13px;"
+            onclick="App.pickAddress('dest', 'gmaps')">🗺️ Link</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-save-passenger">Guardar Pasajero</button>
+      <button class="sheet-cancel" id="btn-close-passenger">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Buscar dirección ═══ -->
+  <div id="sheet-search" class="sheet-backdrop hidden">
+    <div class="sheet sheet-tall">
+      <div class="sheet-handle"></div>
+      <div class="search-tabs" id="search-tabs">
+        <button class="search-tab active" data-city="gualeguaychu">Gualeguaychú</button>
+        <button class="search-tab" data-city="concepcion">Concepción</button>
+      </div>
+      <div class="search-wrap">
+        <svg class="search-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.5">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+        <input type="text" id="search-input" placeholder="Buscar dirección…" autocomplete="off" autocorrect="off"
+          spellcheck="false">
+        <button id="search-clear" class="search-clear hidden">✕</button>
+      </div>
+      <div id="search-results" class="search-results"></div>
+      <div id="search-hint" class="search-hint hidden"></div>
+      <button class="sheet-cancel" id="search-cancel">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Google Maps ═══ -->
+  <div id="sheet-gmaps" class="sheet-backdrop hidden">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Google Maps</div>
+      <p class="sheet-subtitle">Pegá el enlace completo de Google Maps</p>
+      <input type="text" id="gmaps-input" class="text-input" placeholder="https://maps.google.com/..."
+        autocomplete="off">
+      <div id="gmaps-error" class="error-msg hidden"></div>
+      <button id="gmaps-add" class="btn-primary">Agregar</button>
+      <button class="sheet-cancel" id="gmaps-cancel">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Settings / Bases ═══ -->
+  <div id="sheet-settings" class="sheet-backdrop hidden">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Bases Fijas</div>
+      <p class="sheet-subtitle">Definí los lugares de salida/llegada en cada ciudad.</p>
+
+      <div
+        style="margin-bottom: 16px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+          <label style="font-size: 13px; font-weight:600; color: var(--text-dim);">Base en Gualeguaychú</label>
+          <span id="badge-base-gchu-emote" style="font-size:18px;">🏢</span>
+        </div>
+        <div
+          style="font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          id="lbl-base-gchu">Cargando…</div>
+
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500;">Icono en el mapa:
+        </div>
+        <div class="base-emote-picker" id="picker-emote-gchu">
+          <button class="emote-chip" data-city="gchu" data-emote="🏢">🏢</button>
+          <button class="emote-chip" data-city="gchu" data-emote="🏠">🏠</button>
+          <button class="emote-chip" data-city="gchu" data-emote="🚩">🚩</button>
+          <button class="emote-chip" data-city="gchu" data-emote="🚐">🚐</button>
+          <button class="emote-chip" data-city="gchu" data-emote="🚏">🚏</button>
+          <button class="emote-chip" data-city="gchu" data-emote="⛽">⛽</button>
+          <button class="emote-chip" data-city="gchu" data-emote="📍">📍</button>
+          <button class="emote-chip" data-city="gchu" data-emote="⭐">⭐</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top: 10px;">
+          <button class="btn-ghost" id="btn-map-gchu" style="flex:1; padding:9px; font-size:13px;">📍 Elegir en
+            mapa</button>
+          <button class="btn-ghost" id="btn-set-gchu" style="flex:1; padding:9px; font-size:13px;">🔎 Buscar</button>
+        </div>
+        <button class="btn-ghost hidden" id="btn-clear-gchu"
+          style="width: 100%; margin-top: 6px; padding: 7px; font-size: 12px; color: var(--red);">Borrar base</button>
+      </div>
+
+      <div
+        style="margin-bottom: 16px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+          <label style="font-size: 13px; font-weight:600; color: var(--text-dim);">Base en Concepción</label>
+          <span id="badge-base-cdu-emote" style="font-size:18px;">🏢</span>
+        </div>
+        <div
+          style="font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          id="lbl-base-cdu">Cargando…</div>
+
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500;">Icono en el mapa:
+        </div>
+        <div class="base-emote-picker" id="picker-emote-cdu">
+          <button class="emote-chip" data-city="cdu" data-emote="🏢">🏢</button>
+          <button class="emote-chip" data-city="cdu" data-emote="🏠">🏠</button>
+          <button class="emote-chip" data-city="cdu" data-emote="🏁">🏁</button>
+          <button class="emote-chip" data-city="cdu" data-emote="🚐">🚐</button>
+          <button class="emote-chip" data-city="cdu" data-emote="🚏">🚏</button>
+          <button class="emote-chip" data-city="cdu" data-emote="⛽">⛽</button>
+          <button class="emote-chip" data-city="cdu" data-emote="📍">📍</button>
+          <button class="emote-chip" data-city="cdu" data-emote="⭐">⭐</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top: 10px;">
+          <button class="btn-ghost" id="btn-map-cdu" style="flex:1; padding:9px; font-size:13px;">📍 Elegir en
+            mapa</button>
+          <button class="btn-ghost" id="btn-set-cdu" style="flex:1; padding:9px; font-size:13px;">🔎 Buscar</button>
+        </div>
+        <button class="btn-ghost hidden" id="btn-clear-cdu"
+          style="width: 100%; margin-top: 6px; padding: 7px; font-size: 12px; color: var(--red);">Borrar base</button>
+      </div>
+
+      <button class="sheet-cancel" id="settings-close">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Trip Type ═══ -->
+  <div id="sheet-trip" class="sheet-backdrop hidden">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Sentido del Viaje</div>
+
+      <button class="sheet-option trip-opt" data-trip="gchu_cdu">
+        <span class="opt-icon">↗️</span>Gualeguaychú ➔ Concepción
+        <span class="opt-check hidden">✓</span>
+      </button>
+      <button class="sheet-option trip-opt" data-trip="cdu_gchu">
+        <span class="opt-icon">↙️</span>Concepción ➔ Gualeguaychú
+        <span class="opt-check hidden">✓</span>
+      </button>
+
+
+      <button class="sheet-cancel" id="trip-close">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- ═══ SHEET: Edit Stop ═══ -->
+  <div id="sheet-edit-stop" class="sheet-backdrop hidden">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Editar Parada</div>
+      <input type="text" id="edit-stop-name" class="text-input" style="margin-bottom:12px;" autocomplete="off">
+      <button class="btn-primary" id="btn-save-stop">Guardar cambios</button>
+      <button class="sheet-cancel" id="btn-delete-stop" style="color:var(--red); margin-top:8px;">Eliminar
+        parada</button>
+      <button class="sheet-cancel" id="edit-stop-close">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ═══ TAP MODE ═══ -->
+  <div id="tap-bar" class="tap-bar hidden">
+    <span>Tocá el mapa para elegir un punto</span>
+    <button id="tap-cancel">Cancelar</button>
+  </div>
+  <div id="tap-confirm" class="tap-confirm hidden">
+    <div class="tap-addr" id="tap-address">Buscando…</div>
+    <div class="tap-btns">
+      <button id="tap-yes" class="btn-accent">Agregar parada</button>
+      <button id="tap-no" class="btn-ghost">Otro punto</button>
+    </div>
+  </div>
+
+  <!-- ═══ SCRIPTS ═══ -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="js/storage.js?v=34"></script>
+  <script src="js/sync.js?v=1"></script>
+  <script src="js/geocoder.js?v=34"></script>
+  <script src="js/router.js?v=34"></script>
+  <script src="js/optimizer.js?v=34"></script>
+  <script src="js/map.js?v=34"></script>
+  <script src="js/app.js?v=34"></script>
+</body>
+
+</html>
