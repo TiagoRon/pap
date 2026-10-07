@@ -7,7 +7,7 @@ const SYNC_ID = 'my_pap_state';
 const SyncManager = {
   isSyncing: false,
   _debounceTimer: null,
-  _lastPushedString: null,
+  _lastUpdateId: null,
 
   async init() {
     if (!window.supabase) return;
@@ -41,8 +41,13 @@ const SyncManager = {
     // Debounce to prevent spamming the database
     clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(async () => {
+      
+      const updateId = Math.random().toString(36).substring(2, 15);
+      this._lastUpdateId = updateId;
+
       // Gather all local storage data
       const data = {
+        _updateId: updateId,
         city: Storage.getCity(),
         stops: Storage.getStops(),
         baseGchu: Storage.getBaseGchu(),
@@ -53,8 +58,6 @@ const SyncManager = {
         routeData: Storage.getRouteData(),
         doneStops: Array.from(App.doneStops) // Include done state
       };
-      
-      this._lastPushedString = JSON.stringify(data);
 
       try {
         this.isSyncing = true;
@@ -82,7 +85,7 @@ const SyncManager = {
         .single();
       
       if (data && data.data) {
-        this._lastPushedString = JSON.stringify(data.data);
+        this._lastUpdateId = data.data._updateId;
         this.applyData(data.data);
       }
     } catch (e) {
@@ -95,10 +98,10 @@ const SyncManager = {
   handleRemoteChange(newRow) {
     if (this.isSyncing) return;
     if (newRow && newRow.data) {
-      if (JSON.stringify(newRow.data) === this._lastPushedString) return; // Ignore echo
+      if (newRow.data._updateId === this._lastUpdateId) return; // Ignore echo
       
       this.isSyncing = true;
-      this._lastPushedString = JSON.stringify(newRow.data);
+      this._lastUpdateId = newRow.data._updateId;
       this.applyData(newRow.data);
       this.isSyncing = false;
     }
