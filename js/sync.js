@@ -7,6 +7,7 @@ const SYNC_ID = 'my_pap_state';
 const SyncManager = {
   isSyncing: false,
   _debounceTimer: null,
+  _lastPushedString: null,
 
   async init() {
     if (!window.supabase) return;
@@ -52,6 +53,8 @@ const SyncManager = {
         routeData: Storage.getRouteData(),
         doneStops: Array.from(App.doneStops) // Include done state
       };
+      
+      this._lastPushedString = JSON.stringify(data);
 
       try {
         this.isSyncing = true;
@@ -79,6 +82,7 @@ const SyncManager = {
         .single();
       
       if (data && data.data) {
+        this._lastPushedString = JSON.stringify(data.data);
         this.applyData(data.data);
       }
     } catch (e) {
@@ -91,7 +95,10 @@ const SyncManager = {
   handleRemoteChange(newRow) {
     if (this.isSyncing) return;
     if (newRow && newRow.data) {
+      if (JSON.stringify(newRow.data) === this._lastPushedString) return; // Ignore echo
+      
       this.isSyncing = true;
+      this._lastPushedString = JSON.stringify(newRow.data);
       this.applyData(newRow.data);
       this.isSyncing = false;
     }
