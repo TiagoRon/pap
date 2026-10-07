@@ -888,8 +888,11 @@ const App = {
     MapManager.openPopup(id);
   },
 
-  navigateTo(lat, lng) {
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank');
+  navigateTo(id) {
+    const s = this.stops.find(x => x.id === id);
+    if (!s) return;
+    const query = this._getGoogleMapsNavQuery(s);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}&travelmode=driving`, '_blank');
   },
 
   navigateFullRoute() {
@@ -918,7 +921,7 @@ const App = {
     if (allPoints.length < 2) return;
 
     // Use maps/dir/A/B/C format to strictly enforce order and stop-by-stop navigation
-    const pathSegments = allPoints.map(p => `${p.lat},${p.lng}`).join('/');
+    const pathSegments = allPoints.map(p => this._getGoogleMapsNavQuery(p)).join('/');
     const url = `https://www.google.com/maps/dir/${pathSegments}/?travelmode=driving`;
     
     window.open(url, '_blank');
@@ -937,13 +940,22 @@ const App = {
     }
 
     if (pendingStops.length === 1) {
-      this.navigateTo(pendingStops[0].lat, pendingStops[0].lng);
+      this.navigateTo(pendingStops[0].id);
       return;
     }
 
-    const pathSegments = pendingStops.map(p => `${p.lat},${p.lng}`).join('/');
+    const pathSegments = pendingStops.map(p => this._getGoogleMapsNavQuery(p)).join('/');
     const url = `https://www.google.com/maps/dir/${pathSegments}/?travelmode=driving`;
     window.open(url, '_blank');
+  },
+
+  _getGoogleMapsNavQuery(p) {
+    // Si la dirección es genérica o marcada en el mapa, usamos coordenadas para no confundir a Google
+    if (!p.address || p.address === 'Ubicación' || p.address === 'Punto marcado en el mapa') {
+      return `${p.lat},${p.lng}`;
+    }
+    const cityName = p.lat > -32.7 ? 'Concepción del Uruguay' : 'Gualeguaychú';
+    return encodeURIComponent(`${p.address}, ${cityName}, Entre Ríos`);
   },
 
   _clearAll() {
@@ -1228,7 +1240,7 @@ const App = {
           </div>
           ${!isDone ? `
           <div class="stop-card-actions">
-            <button class="stop-btn stop-btn-nav" onclick="event.stopPropagation(); App.navigateTo(${s.lat}, ${s.lng})">
+            <button class="stop-btn stop-btn-nav" onclick="event.stopPropagation(); App.navigateTo('${s.id}')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> Nav
             </button>
             <button class="stop-btn stop-btn-done" onclick="event.stopPropagation(); App.toggleDone('${s.id}')">
