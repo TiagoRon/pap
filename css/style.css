@@ -160,6 +160,7 @@ body {
   cursor: grab;
   display: flex;
   justify-content: center;
+  touch-action: none;
 }
 
 .panel-handle-bar {
@@ -175,6 +176,7 @@ body {
   align-items: center;
   padding: 8px 20px 12px 20px;
   gap: 12px;
+  touch-action: none;
 }
 
 .summary-left {

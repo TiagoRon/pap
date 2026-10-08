@@ -150,55 +150,11 @@ const App = {
       if (e.target.id !== 'btn-panel-menu') togglePanel();
     });
 
-    // Pointer events for drag (works on touch and mouse)
-    handle.addEventListener('pointerdown', (e) => {
-      startY = e.clientY;
-      currentY = e.clientY;
-      isDragging = true;
-      hasDragged = false;
-      panel.style.transition = 'none';
-      initialHeight = panel.offsetHeight;
-      e.target.setPointerCapture(e.pointerId);
-    });
-
-    handle.addEventListener('pointermove', (e) => {
-      if (!isDragging) return;
-      currentY = e.clientY;
-      const delta = startY - currentY;
-      if (Math.abs(delta) > 10) hasDragged = true;
-      
-      if (panel.classList.contains('minimized')) {
-        // Dragging up from minimized
-        if (delta > 0) {
-          panel.style.transform = `translateX(-50%) translateY(calc(100% - 35px - ${delta}px))`;
-        }
-      } else {
-        // Dragging normally
-        let newHeight = initialHeight + delta;
-        const minHeight = 130;
-        const maxHeight = window.innerHeight * 0.75;
-        
-        if (newHeight > maxHeight) {
-          newHeight = maxHeight + (newHeight - maxHeight) * 0.2; // Rubber band effect
-          panel.style.maxHeight = `${newHeight}px`;
-          panel.style.transform = `translateX(-50%)`;
-        } else if (newHeight < minHeight) {
-          // Pulling down below minHeight translates it
-          const pullDown = minHeight - newHeight;
-          panel.style.maxHeight = `${minHeight}px`;
-          panel.style.transform = `translateX(-50%) translateY(${pullDown}px)`;
-        } else {
-          panel.style.maxHeight = `${newHeight}px`;
-          panel.style.transform = `translateX(-50%)`;
-        }
-      }
-    });
-
     const endDrag = (e) => {
       if (!isDragging) return;
       isDragging = false;
       panel.style.transition = 'max-height 0.35s cubic-bezier(0.32, 0.72, 0, 1), transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
-      panel.style.maxHeight = ''; // Remove inline style to let CSS take over
+      panel.style.maxHeight = '';
       panel.style.transform = '';
 
       const delta = startY - currentY;
@@ -217,8 +173,56 @@ const App = {
       }
     };
 
-    handle.addEventListener('pointerup', endDrag);
-    handle.addEventListener('pointercancel', endDrag);
+    const setupDrag = (el) => {
+      el.addEventListener('pointerdown', (e) => {
+        // Ignorar si se toca el botón del menú
+        if (e.target.id === 'btn-panel-menu') return;
+        
+        startY = e.clientY;
+        currentY = e.clientY;
+        isDragging = true;
+        hasDragged = false;
+        panel.style.transition = 'none';
+        initialHeight = panel.offsetHeight;
+        e.target.setPointerCapture(e.pointerId);
+      });
+
+      el.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        currentY = e.clientY;
+        const delta = startY - currentY;
+        if (Math.abs(delta) > 10) hasDragged = true;
+        
+        if (panel.classList.contains('minimized')) {
+          if (delta > 0) {
+            panel.style.transform = `translateX(-50%) translateY(calc(100% - 35px - ${delta}px))`;
+          }
+        } else {
+          let newHeight = initialHeight + delta;
+          const minHeight = 130;
+          const maxHeight = window.innerHeight * 0.75;
+          
+          if (newHeight > maxHeight) {
+            newHeight = maxHeight + (newHeight - maxHeight) * 0.2;
+            panel.style.maxHeight = `${newHeight}px`;
+            panel.style.transform = `translateX(-50%)`;
+          } else if (newHeight < minHeight) {
+            const pullDown = minHeight - newHeight;
+            panel.style.maxHeight = `${minHeight}px`;
+            panel.style.transform = `translateX(-50%) translateY(${pullDown}px)`;
+          } else {
+            panel.style.maxHeight = `${newHeight}px`;
+            panel.style.transform = `translateX(-50%)`;
+          }
+        }
+      });
+
+      el.addEventListener('pointerup', endDrag);
+      el.addEventListener('pointercancel', endDrag);
+    };
+
+    setupDrag(handle);
+    setupDrag(summary);
 
     // Action buttons in panel
     document.getElementById('btn-add-stop').addEventListener('click', () => {
