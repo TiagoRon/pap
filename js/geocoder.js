@@ -34,8 +34,25 @@ const Geocoder = {
    * Forward geocode: address string → results array.
    */
   async search(query, city) {
-    const key = `s2:${city}:${query.toLowerCase().trim()}`;
+    const normQ = query.toLowerCase().trim();
+    const key = `s2:${city}:${normQ}`;
     if (this.cache[key]) return this.cache[key];
+
+    const results = [];
+
+    // Inject base if matches query
+    const baseObj = city === 'gualeguaychu' ? Storage.getBaseGchu() : Storage.getBaseCdu();
+    if (baseObj && baseObj.address) {
+      const normBase = baseObj.address.toLowerCase();
+      if (normBase.includes(normQ) || normQ === 'base' || normQ.includes(normBase)) {
+        results.push({
+          lat: baseObj.lat,
+          lng: baseObj.lng,
+          displayName: `🌟 (Base Guardada) ${baseObj.address}`,
+          label: baseObj.address
+        });
+      }
+    }
 
     await this._throttle();
 
@@ -67,19 +84,21 @@ const Geocoder = {
         data = await res.json();
       }
 
-      const results = data.map((r) => ({
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lon),
-        displayName: r.display_name,
-        label: this._buildLabel(r, query),
-      }));
+      data.forEach((r) => {
+        results.push({
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon),
+          displayName: r.display_name,
+          label: this._buildLabel(r, query),
+        });
+      });
 
       this.cache[key] = results;
       this._persistCache();
       return results;
     } catch (err) {
       console.error('Geocoder search error:', err);
-      return [];
+      return results;
     }
   },
 

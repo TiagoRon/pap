@@ -153,7 +153,7 @@ const MapManager = {
           <div class="popup-num">${markerName ? 'Pasajero: ' + markerName : 'Parada ' + (i + 1)}</div>
           <div class="popup-addr">${this._esc(stop.address)}</div>
           <div class="popup-actions">
-            <button class="popup-btn popup-btn-nav" onclick="App.navigateTo(${stop.lat}, ${stop.lng})">🚗 Navegar con Google Maps</button>
+            <button class="popup-btn popup-btn-nav" onclick="App.navigateTo('${stop.id}')">🚗 Navegar con Google Maps</button>
             <button class="popup-btn popup-btn-edit" onclick="App.editStopName('${stop.id}')">✏️ Editar nombre</button>
             <button class="popup-btn popup-btn-del" onclick="App.deleteStop('${stop.id}')">Eliminar</button>
           </div>
@@ -246,9 +246,37 @@ const MapManager = {
     this.map.fitBounds(L.featureGroup(layers).getBounds().pad(0.12), { animate: true });
   },
 
+  userMarker: null,
+  watchId: null,
+
   locateUser() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) return reject(new Error('GPS no disponible'));
+      
+      if (!this.watchId) {
+        this.watchId = navigator.geolocation.watchPosition(
+          p => {
+            const lat = p.coords.latitude;
+            const lng = p.coords.longitude;
+            
+            if (!this.userMarker) {
+              const iconHtml = `<div style="width: 18px; height: 18px; background: #00FFCC; border: 3px solid #1c1c1c; border-radius: 50%; box-shadow: 0 0 12px #00FFCC;"></div>`;
+              const icon = L.divIcon({
+                html: iconHtml,
+                className: 'user-loc-marker',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+              });
+              this.userMarker = L.marker([lat, lng], { icon, zIndexOffset: 2000, interactive: false }).addTo(this.map);
+            } else {
+              this.userMarker.setLatLng([lat, lng]);
+            }
+          },
+          err => console.warn('Error en watchPosition:', err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+
       navigator.geolocation.getCurrentPosition(
         p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
         () => reject(new Error('No se pudo obtener ubicación')),

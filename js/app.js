@@ -257,9 +257,22 @@ const App = {
 
       const isOriginCdu = this.tempPassenger.origin.lat > -32.7;
       const isDestCdu = this.tempPassenger.dest.lat > -32.7;
-      if (isOriginCdu === isDestCdu) {
-        this.showToast('El origen y destino deben ser en ciudades distintas');
-        return;
+      
+      if (this.tripType === 'gchu_cdu') {
+        if (isOriginCdu || !isDestCdu) {
+          this.showToast('En este viaje, el origen debe ser Gualeguaychú y el destino Concepción');
+          return;
+        }
+      } else if (this.tripType === 'cdu_gchu') {
+        if (!isOriginCdu || isDestCdu) {
+          this.showToast('En este viaje, el origen debe ser Concepción y el destino Gualeguaychú');
+          return;
+        }
+      } else {
+        if (isOriginCdu === isDestCdu) {
+          this.showToast('El origen y destino deben ser en ciudades distintas');
+          return;
+        }
       }
 
       const name = document.getElementById('pass-name').value.trim() || 'Pasajero';
@@ -563,6 +576,16 @@ const App = {
     const address = r.label || r.displayName;
     
     if (this._settingMode) {
+      const isCdu = r.lat > -32.7;
+      if (this._settingMode === 'gchu' && isCdu) {
+        this.showToast('La Base Gualeguaychú debe estar en Gualeguaychú');
+        return;
+      }
+      if (this._settingMode === 'cdu' && !isCdu) {
+        this.showToast('La Base Concepción debe estar en Concepción');
+        return;
+      }
+
       const point = { lat: r.lat, lng: r.lng, address: address };
       if (this._settingMode === 'gchu') Storage.setBaseGchu(point);
       else Storage.setBaseCdu(point);
@@ -683,6 +706,16 @@ const App = {
     document.getElementById('tap-yes').addEventListener('click', () => {
       if (this.pendingTap) {
         if (this._settingMode) {
+          const isCdu = this.pendingTap.lat > -32.7;
+          if (this._settingMode === 'gchu' && isCdu) {
+            this.showToast('La Base Gualeguaychú debe estar en Gualeguaychú');
+            return;
+          }
+          if (this._settingMode === 'cdu' && !isCdu) {
+            this.showToast('La Base Concepción debe estar en Concepción');
+            return;
+          }
+
           const point = { lat: this.pendingTap.lat, lng: this.pendingTap.lng, address: this.pendingTap.address };
           if (this._settingMode === 'gchu') Storage.setBaseGchu(point);
           else Storage.setBaseCdu(point);
@@ -888,8 +921,13 @@ const App = {
     MapManager.openPopup(id);
   },
 
-  navigateTo(id) {
-    const s = this.stops.find(x => x.id === id);
+  navigateTo(idOrLat, lng) {
+    if (lng !== undefined) {
+      // It's a coordinate (base marker)
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${idOrLat},${lng}&travelmode=driving`, '_blank');
+      return;
+    }
+    const s = this.stops.find(x => x.id === idOrLat);
     if (!s) return;
     const query = this._getGoogleMapsNavQuery(s);
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}&travelmode=driving`, '_blank');
