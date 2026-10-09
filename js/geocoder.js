@@ -1,12 +1,12 @@
 const Geocoder = {
-  BASE: 'https://nominatim.openstreetmap.org',
+  BASE: 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer',
   cache: {},
   lastReqTime: 0,
-  MIN_INTERVAL: 1100, // Nominatim requires >= 1 req/s
+  MIN_INTERVAL: 100, // ArcGIS doesn't have the 1/s strict limit, but we throttle a bit
 
   CITY_CONFIG: {
     gualeguaychu: {
-      viewbox: '-58.58,-33.06,-58.46,-32.96',
+      viewbox: '-58.58,-33.06,-58.46,-32.96', // keep for fallback if needed
       center: [-33.0094, -58.5172],
       name: 'Gualeguaychú',
     },
@@ -15,6 +15,11 @@ const Geocoder = {
       center: [-32.4843, -58.2322],
       name: 'Concepción del Uruguay',
     },
+  },
+
+  CUSTOM_OVERRIDES: {
+    // Mantengo esta estructura vacía por si en el futuro se necesita forzar alguna,
+    // pero con ArcGIS ya no debería ser necesario para las alturas comunes.
   },
 
   init() {
@@ -35,6 +40,19 @@ const Geocoder = {
    */
   async search(query, city) {
     const normQ = query.toLowerCase().trim();
+    
+    // Check custom overrides first (even before cache)
+    for (const [overrideKey, overrideData] of Object.entries(this.CUSTOM_OVERRIDES)) {
+      if (normQ.includes(overrideKey)) {
+        return [{
+          lat: overrideData.lat,
+          lng: overrideData.lng,
+          displayName: overrideData.label + ', Concepción del Uruguay',
+          label: overrideData.label
+        }];
+      }
+    }
+
     const key = `s2:${city}:${normQ}`;
     if (this.cache[key]) return this.cache[key];
 
@@ -57,41 +75,33 @@ const Geocoder = {
     await this._throttle();
 
     const cfg = this.CITY_CONFIG[city];
+    const searchCenter = `${cfg.center[1]},${cfg.center[0]}`; // lon, lat
+
     const params = new URLSearchParams({
-      q: query,
-      format: 'json',
-      limit: '5',
-      countrycodes: 'ar',
-      viewbox: cfg.viewbox,
-      bounded: '1',
-      addressdetails: '1',
+      singleLine: `${query}, ${cfg.name}, Entre Ríos, Argentina`,
+      f: 'json',
+      maxLocations: '5',
+      outFields: 'Match_addr,Addr_type',
+      location: searchCenter,
+      distance: '10000', // 10km search radius
     });
 
     try {
-      let res = await fetch(`${this.BASE}/search?${params}`, {
-        headers: { 'Accept-Language': 'es', 'User-Agent': 'PAP-PuertaAPuerta/1.0' },
+      let res = await fetch(`${this.BASE}/findAddressCandidates?${params}`, {
+        headers: { 'Accept-Language': 'es' },
       });
       let data = await res.json();
 
-      // If no results bounded, retry unbounded with city name appended
-      if (data.length === 0) {
-        await this._throttle();
-        params.set('bounded', '0');
-        params.set('q', `${query}, ${cfg.name}, Entre Ríos, Argentina`);
-        res = await fetch(`${this.BASE}/search?${params}`, {
-          headers: { 'Accept-Language': 'es', 'User-Agent': 'PAP-PuertaAPuerta/1.0' },
+      if (data.candidates) {
+        data.candidates.forEach((r) => {
+          results.push({
+            lat: parseFloat(r.location.y),
+            lng: parseFloat(r.location.x),
+            displayName: r.address,
+            label: r.address.split(',')[0],
+          });
         });
-        data = await res.json();
       }
-
-      data.forEach((r) => {
-        results.push({
-          lat: parseFloat(r.lat),
-          lng: parseFloat(r.lon),
-          displayName: r.display_name,
-          label: this._buildLabel(r, query),
-        });
-      });
 
       this.cache[key] = results;
       this._persistCache();
@@ -112,24 +122,30 @@ const Geocoder = {
     await this._throttle();
 
     const params = new URLSearchParams({
-      lat: String(lat),
-      lon: String(lng),
-      format: 'json',
-      addressdetails: '1',
-      zoom: '18',
+      location: `${lng},${lat}`,
+      f: 'json',
+      outFields: 'Match_addr',
     });
 
     try {
-      const res = await fetch(`${this.BASE}/reverse?${params}`, {
-        headers: { 'Accept-Language': 'es', 'User-Agent': 'PAP-PuertaAPuerta/1.0' },
+      const res = await fetch(`${this.BASE}/reverseGeocode?${params}`, {
+        headers: { 'Accept-Language': 'es' },
       });
       const data = await res.json();
+
+      let displayName = 'Ubicación sin nombre';
+      let label = 'Ubicación';
+
+      if (data && data.address) {
+        displayName = data.address.LongLabel || data.address.Match_addr || displayName;
+        label = data.address.ShortLabel || data.address.Address || label;
+      }
 
       const result = {
         lat,
         lng,
-        displayName: data.display_name || 'Ubicación sin nombre',
-        label: this._buildLabel(data),
+        displayName,
+        label,
       };
 
       this.cache[key] = result;
