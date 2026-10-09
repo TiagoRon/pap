@@ -945,26 +945,25 @@ const App = {
       return;
     }
     
-    // Check if we have bases
+    // Check if we have an end base
     const bGchu = Storage.getBaseGchu();
     const bCdu = Storage.getBaseCdu();
-    let startPoint = null;
     let endPoint = null;
-    if (this.tripType === 'gchu_cdu') { startPoint = bGchu; endPoint = bCdu; }
-    else if (this.tripType === 'cdu_gchu') { startPoint = bCdu; endPoint = bGchu; }
-    else if (this.tripType === 'gchu_gchu') { startPoint = bGchu; endPoint = bGchu; }
-    else if (this.tripType === 'cdu_cdu') { startPoint = bCdu; endPoint = bCdu; }
+    if (this.tripType === 'gchu_cdu') { endPoint = bCdu; }
+    else if (this.tripType === 'cdu_gchu') { endPoint = bGchu; }
+    else if (this.tripType === 'gchu_gchu') { endPoint = bGchu; }
+    else if (this.tripType === 'cdu_cdu') { endPoint = bCdu; }
 
     const allPoints = [];
-    if (startPoint) allPoints.push(startPoint);
+    // Siempre empezamos desde la ubicación actual (omitiendo la base de inicio)
     allPoints.push(...pendingStops);
     if (endPoint) allPoints.push(endPoint);
 
-    if (allPoints.length < 2) return;
+    if (allPoints.length === 0) return;
 
-    // Use maps/dir/A/B/C format to strictly enforce order and stop-by-stop navigation
+    // Use maps/dir//A/B/C format (double slash at start forces origin="Your Location")
     const pathSegments = allPoints.map(p => this._getGoogleMapsNavQuery(p)).join('/');
-    const url = `https://www.google.com/maps/dir/${pathSegments}/?travelmode=driving`;
+    const url = `https://www.google.com/maps/dir//${pathSegments}/?travelmode=driving`;
     
     window.open(url, '_blank');
   },
@@ -986,8 +985,9 @@ const App = {
       return;
     }
 
+    // Force "Your location" by starting path with an empty segment (//)
     const pathSegments = pendingStops.map(p => this._getGoogleMapsNavQuery(p)).join('/');
-    const url = `https://www.google.com/maps/dir/${pathSegments}/?travelmode=driving`;
+    const url = `https://www.google.com/maps/dir//${pathSegments}/?travelmode=driving`;
     window.open(url, '_blank');
   },
 
