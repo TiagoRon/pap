@@ -1124,7 +1124,9 @@ const App = {
       }
 
       const matrix = await Router.getDistanceMatrix(waypoints);
-      const order = Optimizer.optimize(matrix.durations, fixedStartIndex, fixedEndIndex); 
+      // Optimizamos usando distancias (matrix.distances) en vez de tiempos,
+      // para evitar que OSRM nos haga dar rodeos largos por avenidas rápidas.
+      const order = Optimizer.optimize(matrix.distances, fixedStartIndex, fixedEndIndex); 
       
       const newStops = [];
       const orderedWaypoints = [];
