@@ -9,7 +9,12 @@ const Storage = {
     TRIP_TYPE: 'pap_trip_type',
     ROUTE_DATA: 'pap_route_data',
     GEOCODE_CACHE: 'pap_geo_cache',
+    NAV_START_MODE: 'pap_nav_start',
   },
+
+  // Navigation Start Mode
+  getNavStartMode() { return this._load(this.KEYS.NAV_START_MODE) || 'location'; },
+  setNavStartMode(mode) { this._save(this.KEYS.NAV_START_MODE, mode); },
 
   DEFAULT_BASES: {
     gchu: {

@@ -945,30 +945,39 @@ const App = {
       return;
     }
     
-    // Check if we have an end base
+    const navMode = Storage.getNavStartMode(); // 'location' or 'base'
     const bGchu = Storage.getBaseGchu();
     const bCdu = Storage.getBaseCdu();
+    let startPoint = null;
     let endPoint = null;
-    if (this.tripType === 'gchu_cdu') { endPoint = bCdu; }
-    else if (this.tripType === 'cdu_gchu') { endPoint = bGchu; }
-    else if (this.tripType === 'gchu_gchu') { endPoint = bGchu; }
-    else if (this.tripType === 'cdu_cdu') { endPoint = bCdu; }
+    if (this.tripType === 'gchu_cdu') { startPoint = bGchu; endPoint = bCdu; }
+    else if (this.tripType === 'cdu_gchu') { startPoint = bCdu; endPoint = bGchu; }
+    else if (this.tripType === 'gchu_gchu') { startPoint = bGchu; endPoint = bGchu; }
+    else if (this.tripType === 'cdu_cdu') { startPoint = bCdu; endPoint = bCdu; }
 
     const allPoints = [];
-    // Siempre empezamos desde la ubicación actual (omitiendo la base de inicio)
+    if (navMode === 'base' && startPoint) {
+      allPoints.push(startPoint);
+    }
+    
     allPoints.push(...pendingStops);
     if (endPoint) allPoints.push(endPoint);
 
     if (allPoints.length === 0) return;
 
-    // Use maps/dir//A/B/C format (double slash at start forces origin="Your Location")
     const pathSegments = allPoints.map(p => this._getGoogleMapsNavQuery(p)).join('/');
-    const url = `https://www.google.com/maps/dir//${pathSegments}/?travelmode=driving`;
+    
+    // Si usamos ubicación actual, ponemos doble slash (//) para forzar origin=Current+Location
+    // Si usamos base, la base ya es el primer segmento en pathSegments, pero igual dir/A/B funciona
+    const url = navMode === 'location' ? 
+      `https://www.google.com/maps/dir//${pathSegments}/?travelmode=driving` : 
+      `https://www.google.com/maps/dir/${pathSegments}/?travelmode=driving`;
     
     window.open(url, '_blank');
   },
 
   navigateCityRoute(city) {
+    const navMode = Storage.getNavStartMode();
     const pendingStops = this.stops.filter(s => {
       if (this.doneStops.has(s.id)) return false;
       const sCity = s.lat > -32.7 ? 'Concepción' : 'Gualeguaychú';
@@ -980,14 +989,25 @@ const App = {
       return;
     }
 
-    if (pendingStops.length === 1) {
+    if (pendingStops.length === 1 && navMode === 'location') {
       this.navigateTo(pendingStops[0].id);
       return;
     }
 
-    // Force "Your location" by starting path with an empty segment (//)
-    const pathSegments = pendingStops.map(p => this._getGoogleMapsNavQuery(p)).join('/');
-    const url = `https://www.google.com/maps/dir//${pathSegments}/?travelmode=driving`;
+    const allPoints = [];
+    if (navMode === 'base') {
+      const bGchu = Storage.getBaseGchu();
+      const bCdu = Storage.getBaseCdu();
+      const startPoint = city === 'Concepción' ? bCdu : bGchu;
+      if (startPoint) allPoints.push(startPoint);
+    }
+    allPoints.push(...pendingStops);
+
+    const pathSegments = allPoints.map(p => this._getGoogleMapsNavQuery(p)).join('/');
+    const url = navMode === 'location' ? 
+      `https://www.google.com/maps/dir//${pathSegments}/?travelmode=driving` : 
+      `https://www.google.com/maps/dir/${pathSegments}/?travelmode=driving`;
+      
     window.open(url, '_blank');
   },
 
@@ -1302,8 +1322,17 @@ const App = {
     // Actions button
     if (this.stops.length >= 2) {
       if (this.routeCalculated) {
+        const navMode = Storage.getNavStartMode();
+        const modeLabel = navMode === 'location' ? 'Origen: Mi ubicación' : 'Origen: Base de salida';
+        const modeIcon = navMode === 'location' ? '📍' : '🏢';
+        
         actionsContainer.innerHTML = `
-          <button id="btn-nav-full" class="btn-primary" style="margin-top:12px; background:#4285F4; color:white; border:none; box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);">
+          <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+            <button id="btn-toggle-nav-mode" style="background:none; border:none; color:var(--text-dim); font-size:12px; display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:12px; cursor:pointer;">
+              ${modeIcon} <span style="font-weight:600;">${modeLabel}</span> <span style="font-size:10px; opacity:0.7;">(Cambiar)</span>
+            </button>
+          </div>
+          <button id="btn-nav-full" class="btn-primary" style="margin-top:4px; background:#4285F4; color:white; border:none; box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);">
             🚗 Navegar todo en Google Maps
           </button>
           <button id="btn-add-secondary" class="btn-add-stop" style="margin-top:8px; background:var(--surface-3); border:none;">
@@ -1312,6 +1341,11 @@ const App = {
         `;
         document.getElementById('btn-nav-full').addEventListener('click', () => this.navigateFullRoute());
         document.getElementById('btn-add-secondary').addEventListener('click', () => this._openSheet('sheet-passenger'));
+        document.getElementById('btn-toggle-nav-mode').addEventListener('click', () => {
+          const newMode = Storage.getNavStartMode() === 'location' ? 'base' : 'location';
+          Storage.setNavStartMode(newMode);
+          this._updateUI();
+        });
       } else {
         actionsContainer.innerHTML = `
           <button id="btn-optimize-main" class="btn-optimize">
